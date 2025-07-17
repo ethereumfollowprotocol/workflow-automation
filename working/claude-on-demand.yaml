@@ -1,0 +1,82 @@
+name: Claude On-Demand Assistant
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  ai-response:
+    # Only run if the app is mentioned and it's not the app itself commenting
+    # if: |
+    #   contains(github.event.comment.body, '@efp-dev-ops') && 
+    #   github.event.comment.user.login != 'efp-dev-ops[bot]'
+    if: |
+      (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@efp-dev-ops')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@efp-dev-ops')) ||
+        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@efp-dev-ops')) ||
+        (github.event_name == 'issues' && contains(github.event.issue.body, '@efp-dev-ops'))
+      ) && (
+        github.actor == '0xthrpw' ||
+        github.actor == 'encrypteddegen' ||
+        github.actor == 'caveman-eth' ||
+        github.actor == 'brantlymillegan'
+      ) && 
+      github.event.comment.user.login != 'efp-dev-ops[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Generate Custom App Token
+      id: generate-token
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ secrets.APP_ID }}
+        private-key: ${{ secrets.PRIVATE_KEY }}
+    
+    - name: Extract instruction from comment
+      id: extract-instruction
+      run: |
+        # Get the comment body and extract instruction after @mention
+        COMMENT_BODY="${{ github.event.comment.body }}"
+        
+        # Remove the @mention and get the instruction
+        INSTRUCTION=$(echo "$COMMENT_BODY" | sed 's/@efp-dev-ops[[:space:]]*//' | sed 's/^[[:space:]]*//')
+        
+        # Set as output for next step
+        echo "instruction<<EOF" >> $GITHUB_OUTPUT
+        echo "$INSTRUCTION" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "Extracted instruction: $INSTRUCTION"
+    
+    - name: Claude Response
+      uses: anthropics/claude-code-action@v1
+      with:
+        # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+        claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        github_token: ${{ steps.generate-token.outputs.token }}
+        direct_prompt: |
+          You are an AI assistant for our development team. A team member has requested help with the following:
+          
+          **User Request:** ${{ steps.extract-instruction.outputs.instruction }}
+          
+          Please provide a helpful, accurate response. If the request involves code analysis, focus on the current repository context. If it's a general question, provide clear and actionable guidance.
+          
+          Keep your response concise but thorough, and format it nicely for GitHub comments.
+    
+    - name: React to original comment
+      run: |
+        # Add a reaction to show the app "saw" the mention
+        gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+          --method POST \
+          --field content="+1"
+      env:
+        GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
