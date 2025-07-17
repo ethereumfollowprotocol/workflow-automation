@@ -27,11 +27,11 @@ jobs:
         private-key: ${{ secrets.PRIVATE_KEY }}
     
     - name: Claude Security Review
-      uses: anthropics/claude-code-action@v1
+      uses: anthropics/claude-code-action@v0
       with:
         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
         github_token: ${{ steps.generate-token.outputs.token }}
-        prompt: |
+        direct_prompt: |
           You are the AI security reviewer for our organization.
           
           Please analyze this pull request for:
@@ -47,14 +47,13 @@ jobs:
           - Secure configuration practices
           
           Please provide specific, actionable feedback with line numbers where applicable.
-        create_review: true
     
     - name: Claude Code Quality Review
-      uses: anthropics/claude-code-action@v1
+      uses: anthropics/claude-code-action@v0
       with:
         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
         github_token: ${{ steps.generate-token.outputs.token }}
-        prompt: |
+        direct_prompt: |
           You are the AI code quality reviewer for our organization.
           
           Please analyze this pull request for:
@@ -76,7 +75,6 @@ jobs:
           - Testing recommendations
           
           Format your response as a professional code review.
-        files: "src/**/*"  # Customize to your project structure
     
     - name: Post Summary Comment
       run: |
