@@ -26,7 +26,7 @@ jobs:
         app-id: ${{ secrets.APP_ID }}
         private-key: ${{ secrets.PRIVATE_KEY }}
     
-    - name: Claude Security Review
+    - name: AI Security Review
       uses: anthropics/claude-code-action@v0
       with:
         # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -49,7 +49,7 @@ jobs:
           
           Please provide specific, actionable feedback with line numbers where applicable.
     
-    - name: Claude Code Quality Review
+    - name: AI Code Quality Review
       uses: anthropics/claude-code-action@v0
       with:
         # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
