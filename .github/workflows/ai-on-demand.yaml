@@ -82,21 +82,21 @@ jobs:
           
           Keep your response concise but thorough, and format it nicely for GitHub comments.
     
-    - name: React to original comment
-      run: |
-        # Add a reaction to show the app "saw" the mention
-        if [ "${{ github.event_name }}" = "issue_comment" ] || [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
-          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
-            --method POST \
-            --field content="+1"
-        elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
-          gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews/${{ github.event.review.id }}/reactions \
-            --method POST \
-            --field content="+1"
-        elif [ "${{ github.event_name }}" = "issues" ]; then
-          gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/reactions \
-            --method POST \
-            --field content="+1"
-        fi
+    # - name: React to original comment
+    #   run: |
+    #     # Add a reaction to show the app "saw" the mention
+    #     if [ "${{ github.event_name }}" = "issue_comment" ] || [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+    #       gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+    #         --method POST \
+    #         --field content="+1"
+    #     elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
+    #       gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews/${{ github.event.review.id }}/reactions \
+    #         --method POST \
+    #         --field content="+1"
+    #     elif [ "${{ github.event_name }}" = "issues" ]; then
+    #       gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/reactions \
+    #         --method POST \
+    #         --field content="+1"
+    #     fi
       env:
         GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
