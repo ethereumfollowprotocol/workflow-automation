@@ -19,8 +19,7 @@ jobs:
         github.actor == 'encrypteddegen' ||
         github.actor == 'caveman-eth' ||
         github.actor == 'brantlymillegan'
-      ) && 
-      github.event.comment.user.login != 'efp-dev-ops[bot]'
+      ) 
     runs-on: ubuntu-latest
     permissions:
       contents: read
