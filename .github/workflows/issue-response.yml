@@ -1,0 +1,377 @@
+name: Reusable Issue Response Workflow
+
+on:
+  workflow_call:
+    inputs:
+      config-profile:
+        description: 'Configuration profile to use (default, frontend, backend, security, experimental)'
+        required: false
+        type: string
+        default: 'default'
+      repository-config:
+        description: 'Path to repository-specific configuration file'
+        required: false
+        type: string
+        default: '.github/ai-review-config.json'
+      claude-code-action-ref:
+        description: 'Reference to claude-code-action to use'
+        required: false
+        type: string
+        default: '0xthrpw/claude-code-action@v0.0.1'
+      bot-mention:
+        description: 'Bot mention trigger (@bot-name)'
+        required: false
+        type: string
+        default: '@efp-dev-ops'
+      max-response-time:
+        description: 'Maximum time for response in minutes'
+        required: false
+        type: number
+        default: 5
+      enable-auto-labeling:
+        description: 'Enable automatic issue labeling'
+        required: false
+        type: boolean
+        default: true
+      enable-escalation:
+        description: 'Enable automatic escalation for complex issues'
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: 'Claude Code OAuth token for authentication'
+        required: true
+      APP_ID:
+        description: 'GitHub App ID for token generation'
+        required: true
+      PRIVATE_KEY:
+        description: 'GitHub App private key for token generation'
+        required: true
+      ALLOWED_USER_LIST:
+        description: 'JSON array of allowed users for triggering responses'
+        required: true
+
+jobs:
+  validate-trigger:
+    runs-on: ubuntu-latest
+    outputs:
+      should-respond: ${{ steps.check-trigger.outputs.should-respond }}
+      instruction: ${{ steps.extract-instruction.outputs.instruction }}
+      event-type: ${{ steps.check-trigger.outputs.event-type }}
+    steps:
+      - name: Check Trigger Conditions
+        id: check-trigger
+        run: |
+          SHOULD_RESPOND="false"
+          EVENT_TYPE=""
+          
+          # Check if the trigger conditions are met
+          if [[ "${{ github.event_name }}" == "issue_comment" && "${{ contains(github.event.comment.body, inputs.bot-mention) }}" == "true" ]]; then
+            EVENT_TYPE="issue_comment"
+            SHOULD_RESPOND="true"
+          elif [[ "${{ github.event_name }}" == "pull_request_review_comment" && "${{ contains(github.event.comment.body, inputs.bot-mention) }}" == "true" ]]; then
+            EVENT_TYPE="pull_request_review_comment"
+            SHOULD_RESPOND="true"
+          elif [[ "${{ github.event_name }}" == "pull_request_review" && "${{ contains(github.event.review.body, inputs.bot-mention) }}" == "true" ]]; then
+            EVENT_TYPE="pull_request_review"
+            SHOULD_RESPOND="true"
+          elif [[ "${{ github.event_name }}" == "issues" && "${{ contains(github.event.issue.body, inputs.bot-mention) }}" == "true" ]]; then
+            EVENT_TYPE="issues"
+            SHOULD_RESPOND="true"
+          fi
+          
+          # Check if user is in allowed list
+          if [ "$SHOULD_RESPOND" = "true" ]; then
+            ALLOWED_USERS="${{ secrets.ALLOWED_USER_LIST }}"
+            if [ -n "$ALLOWED_USERS" ]; then
+              if ! echo "$ALLOWED_USERS" | jq -r '.[]' | grep -q "^${{ github.actor }}$"; then
+                echo "User ${{ github.actor }} not in allowed list"
+                SHOULD_RESPOND="false"
+              fi
+            fi
+          fi
+          
+          # Check if it's not the bot itself commenting
+          if [[ "${{ github.event.comment.user.login }}" == *"[bot]" ]]; then
+            SHOULD_RESPOND="false"
+          fi
+          
+          echo "should-respond=$SHOULD_RESPOND" >> $GITHUB_OUTPUT
+          echo "event-type=$EVENT_TYPE" >> $GITHUB_OUTPUT
+
+      - name: Extract Instruction
+        id: extract-instruction
+        if: steps.check-trigger.outputs.should-respond == 'true'
+        run: |
+          COMMENT_BODY=""
+          
+          case "${{ steps.check-trigger.outputs.event-type }}" in
+            "issue_comment")
+              COMMENT_BODY="${{ github.event.comment.body }}"
+              ;;
+            "pull_request_review_comment")
+              COMMENT_BODY="${{ github.event.comment.body }}"
+              ;;
+            "pull_request_review")
+              COMMENT_BODY="${{ github.event.review.body }}"
+              ;;
+            "issues")
+              COMMENT_BODY="${{ github.event.issue.body }}"
+              ;;
+          esac
+          
+          # Remove the @mention and extract instruction
+          INSTRUCTION=$(echo "$COMMENT_BODY" | sed "s/${{ inputs.bot-mention }}[[:space:]]*//" | sed 's/^[[:space:]]*//')
+          
+          # Input validation
+          if [ ${#INSTRUCTION} -gt 4000 ]; then
+            echo "Instruction too long, truncating..."
+            INSTRUCTION=$(echo "$INSTRUCTION" | head -c 4000)
+          fi
+          
+          echo "instruction<<EOF" >> $GITHUB_OUTPUT
+          echo "$INSTRUCTION" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  load-configuration:
+    needs: validate-trigger
+    if: needs.validate-trigger.outputs.should-respond == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      config: ${{ steps.load-config.outputs.config }}
+      response-prompt: ${{ steps.load-prompts.outputs.response-prompt }}
+      language: ${{ steps.detect-language.outputs.language }}
+    steps:
+      - name: Checkout Central Workflows
+        uses: actions/checkout@v4
+        with:
+          repository: ethereumfollowprotocol/workflow-automation
+          path: central-workflows
+          ref: main
+
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+        with:
+          path: target-repo
+          fetch-depth: 1
+
+      - name: Load Configuration
+        id: load-config
+        run: |
+          CONFIG_FILE="central-workflows/configs/profiles/${{ inputs.config-profile }}.json"
+          REPO_CONFIG_FILE="target-repo/${{ inputs.repository-config }}"
+          
+          # Start with profile configuration
+          if [ -f "$CONFIG_FILE" ]; then
+            CONFIG=$(cat "$CONFIG_FILE")
+          else
+            echo "Profile ${{ inputs.config-profile }} not found, using default"
+            CONFIG=$(cat "central-workflows/configs/profiles/default.json")
+          fi
+          
+          # Override with repository-specific config if it exists
+          if [ -f "$REPO_CONFIG_FILE" ]; then
+            REPO_CONFIG=$(cat "$REPO_CONFIG_FILE")
+            # Merge configurations (repository config takes precedence)
+            CONFIG=$(echo "$CONFIG $REPO_CONFIG" | jq -s '.[0] * .[1]')
+          fi
+          
+          echo "config<<EOF" >> $GITHUB_OUTPUT
+          echo "$CONFIG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Detect Primary Language
+        id: detect-language
+        working-directory: target-repo
+        run: |
+          # Detect primary language based on file extensions
+          LANGUAGE="javascript"  # default
+          
+          if find . -name "*.ts" -o -name "*.tsx" | head -1 | grep -q .; then
+            LANGUAGE="typescript"
+          elif find . -name "*.py" | head -1 | grep -q .; then
+            LANGUAGE="python"
+          elif find . -name "*.go" | head -1 | grep -q .; then
+            LANGUAGE="go"
+          elif find . -name "*.rs" | head -1 | grep -q .; then
+            LANGUAGE="rust"
+          elif find . -name "*.java" | head -1 | grep -q .; then
+            LANGUAGE="java"
+          elif find . -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" | head -1 | grep -q .; then
+            LANGUAGE="cpp"
+          elif find . -name "*.c" | head -1 | grep -q .; then
+            LANGUAGE="c"
+          elif find . -name "*.rb" | head -1 | grep -q .; then
+            LANGUAGE="ruby"
+          elif find . -name "*.php" | head -1 | grep -q .; then
+            LANGUAGE="php"
+          fi
+          
+          echo "language=$LANGUAGE" >> $GITHUB_OUTPUT
+
+      - name: Load Response Prompt
+        id: load-prompts
+        run: |
+          LANGUAGE="${{ steps.detect-language.outputs.language }}"
+          EVENT_TYPE="${{ needs.validate-trigger.outputs.event-type }}"
+          
+          # Load response prompt based on event type and language
+          RESPONSE_PROMPT=""
+          
+          if [ -f "central-workflows/prompts/response/${EVENT_TYPE}-${LANGUAGE}.md" ]; then
+            RESPONSE_PROMPT=$(cat "central-workflows/prompts/response/${EVENT_TYPE}-${LANGUAGE}.md")
+          elif [ -f "central-workflows/prompts/response/${EVENT_TYPE}-default.md" ]; then
+            RESPONSE_PROMPT=$(cat "central-workflows/prompts/response/${EVENT_TYPE}-default.md")
+          else
+            RESPONSE_PROMPT=$(cat "central-workflows/prompts/response/general-default.md")
+          fi
+          
+          echo "response-prompt<<EOF" >> $GITHUB_OUTPUT
+          echo "$RESPONSE_PROMPT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  ai-response:
+    needs: [validate-trigger, load-configuration]
+    if: needs.validate-trigger.outputs.should-respond == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+
+      - name: Generate Custom App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+
+      - name: React to Mention
+        run: |
+          # Add reaction to show the bot saw the mention
+          COMMENT_ID=""
+          
+          case "${{ needs.validate-trigger.outputs.event-type }}" in
+            "issue_comment"|"pull_request_review_comment")
+              COMMENT_ID="${{ github.event.comment.id }}"
+              ;;
+            "pull_request_review")
+              COMMENT_ID="${{ github.event.review.id }}"
+              ;;
+          esac
+          
+          if [ -n "$COMMENT_ID" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID/reactions \
+              --method POST \
+              --field content="+1" || true
+          fi
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+      - name: AI Response
+        uses: ${{ inputs.claude-code-action-ref }}
+        continue-on-error: true
+        timeout-minutes: ${{ inputs.max-response-time }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.generate-token.outputs.token }}
+          direct_prompt: |
+            ${{ needs.load-configuration.outputs.response-prompt }}
+            
+            ## User Request
+            ${{ needs.validate-trigger.outputs.instruction }}
+            
+            ## Context
+            Repository: ${{ github.repository }}
+            Event Type: ${{ needs.validate-trigger.outputs.event-type }}
+            Language: ${{ needs.load-configuration.outputs.language }}
+            Profile: ${{ inputs.config-profile }}
+            User: ${{ github.actor }}
+            
+            ## Configuration
+            ${{ needs.load-configuration.outputs.config }}
+
+  auto-labeling:
+    needs: [validate-trigger, load-configuration, ai-response]
+    if: needs.validate-trigger.outputs.should-respond == 'true' && inputs.enable-auto-labeling && needs.validate-trigger.outputs.event-type == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Generate Custom App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+
+      - name: Auto-label Issue
+        run: |
+          INSTRUCTION="${{ needs.validate-trigger.outputs.instruction }}"
+          LABELS=""
+          
+          # Simple keyword-based labeling
+          if echo "$INSTRUCTION" | grep -i -E "bug|error|broken|fix|issue"; then
+            LABELS="$LABELS,bug"
+          fi
+          
+          if echo "$INSTRUCTION" | grep -i -E "feature|enhancement|improve|add"; then
+            LABELS="$LABELS,enhancement"
+          fi
+          
+          if echo "$INSTRUCTION" | grep -i -E "question|help|how|what|why"; then
+            LABELS="$LABELS,question"
+          fi
+          
+          if echo "$INSTRUCTION" | grep -i -E "document|readme|doc|guide"; then
+            LABELS="$LABELS,documentation"
+          fi
+          
+          if echo "$INSTRUCTION" | grep -i -E "security|vulnerab|exploit|attack"; then
+            LABELS="$LABELS,security"
+          fi
+          
+          # Remove leading comma
+          LABELS=$(echo "$LABELS" | sed 's/^,//')
+          
+          if [ -n "$LABELS" ]; then
+            gh issue edit ${{ github.event.issue.number }} --add-label "$LABELS"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+  escalation:
+    needs: [validate-trigger, ai-response]
+    if: needs.validate-trigger.outputs.should-respond == 'true' && inputs.enable-escalation && failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Generate Custom App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+
+      - name: Escalate Complex Issue
+        run: |
+          ESCALATION_MSG="## ⚠️ AI Assistant Escalation\n\n"
+          ESCALATION_MSG="${ESCALATION_MSG}The AI assistant was unable to fully process this request. "
+          ESCALATION_MSG="${ESCALATION_MSG}This issue has been automatically flagged for human review.\n\n"
+          ESCALATION_MSG="${ESCALATION_MSG}**Original Request:** ${{ needs.validate-trigger.outputs.instruction }}\n\n"
+          ESCALATION_MSG="${ESCALATION_MSG}A team member will respond soon.\n\n"
+          ESCALATION_MSG="${ESCALATION_MSG}---\n*Automated escalation by [EthereumFollowProtocol Workflow Automation](https://github.com/ethereumfollowprotocol/workflow-automation)*"
+          
+          if [ "${{ needs.validate-trigger.outputs.event-type }}" = "issues" ]; then
+            gh issue comment ${{ github.event.issue.number }} --body "$ESCALATION_MSG"
+            gh issue edit ${{ github.event.issue.number }} --add-label "needs-human-review,escalated"
+          elif [ "${{ needs.validate-trigger.outputs.event-type }}" = "issue_comment" ]; then
+            gh issue comment ${{ github.event.issue.number }} --body "$ESCALATION_MSG"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}

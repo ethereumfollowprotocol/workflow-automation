@@ -1,0 +1,181 @@
+name: Update Propagation
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: 'Version to propagate (leave empty for latest)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Run in dry-run mode (no actual updates)'
+        required: false
+        type: boolean
+        default: false
+      repositories_config:
+        description: 'Path to repositories configuration'
+        required: false
+        type: string
+        default: './config/repositories.json'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  propagate-updates:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies
+        run: bun install
+
+      - name: Determine Target Version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.target_version }}" ]; then
+            VERSION="${{ github.event.inputs.target_version }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            # Get latest release
+            VERSION=$(gh release view --json tagName -q .tagName 2>/dev/null || echo "main")
+          fi
+          
+          # Clean version string
+          VERSION=${VERSION#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Target version: $VERSION"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Update Configuration
+        run: |
+          # Create temporary config for this run
+          cat > update-config.json << EOF
+          {
+            "repositories": [
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "efp-app",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "frontend",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol", 
+                "repo": "contracts",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "backend",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "api",
+                "workflowPath": ".github/workflows/ai-review.yml", 
+                "configProfile": "backend",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "indexer",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "backend", 
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "list-registry",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "backend",
+                "enabled": true
+              }
+            ],
+            "workflowVersion": "${{ steps.version.outputs.version }}",
+            "updateMessage": "### Changes in v${{ steps.version.outputs.version }}\\n\\nSee the [changelog](https://github.com/ethereumfollowprotocol/workflow-automation/releases/tag/v${{ steps.version.outputs.version }}) for detailed information about improvements and new features.",
+            "dryRun": ${{ github.event.inputs.dry_run || false }}
+          }
+          EOF
+
+      - name: Run Update Propagation
+        run: |
+          export GITHUB_TOKEN="${{ secrets.WORKFLOW_PROPAGATION_TOKEN || secrets.GITHUB_TOKEN }}"
+          bun run scripts/update-propagation.ts update-config.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PROPAGATION_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Generate Report
+        if: always()
+        run: |
+          echo "## 🤖 Update Propagation Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Version:** v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Dry Run:** ${{ github.event.inputs.dry_run || false }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "propagation-report.json" ]; then
+            echo "**Results:**" >> $GITHUB_STEP_SUMMARY
+            cat propagation-report.json | jq -r '.summary | 
+              "- ✅ Successful: \(.success)\n- ⏭️  Skipped: \(.skipped)\n- ❌ Failed: \(.failed)"' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No detailed report available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: propagation-report
+          path: |
+            update-config.json
+            propagation-report.json
+            version-check-*.json
+          retention-days: 30
+
+  notify-completion:
+    needs: propagate-updates
+    if: always() && !github.event.inputs.dry_run
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Notify Slack
+        if: env.SLACK_WEBHOOK_URL
+        run: |
+          STATUS="${{ needs.propagate-updates.result }}"
+          COLOR="good"
+          if [ "$STATUS" != "success" ]; then
+            COLOR="danger"
+          fi
+          
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"Workflow Update Propagation Complete\",
+                \"fields\": [
+                  {\"title\": \"Version\", \"value\": \"v${{ steps.version.outputs.version }}\", \"short\": true},
+                  {\"title\": \"Status\", \"value\": \"$STATUS\", \"short\": true},
+                  {\"title\": \"Repository\", \"value\": \"${{ github.repository }}\", \"short\": true},
+                  {\"title\": \"Run\", \"value\": \"<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>\", \"short\": true}
+                ]
+              }]
+            }" \
+            ${{ env.SLACK_WEBHOOK_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
