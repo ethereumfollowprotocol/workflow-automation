@@ -1,0 +1,253 @@
+name: Version Monitoring
+
+on:
+  schedule:
+    # Run every day at 9 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      repositories_config:
+        description: 'Path to repositories configuration'
+        required: false
+        type: string
+        default: './config/repositories.json'
+
+permissions:
+  contents: read
+  issues: write
+  pages: write
+  id-token: write
+
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies
+        run: bun install
+
+      - name: Create Repositories Configuration
+        run: |
+          # Create temporary config for this run
+          cat > repositories-config.json << EOF
+          {
+            "repositories": [
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "efp-app",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "frontend",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol", 
+                "repo": "contracts",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "backend",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "api",
+                "workflowPath": ".github/workflows/ai-review.yml", 
+                "configProfile": "backend",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "indexer",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "backend", 
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "list-registry",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "backend",
+                "enabled": true
+              }
+            ]
+          }
+          EOF
+
+      - name: Run Version Check
+        id: version-check
+        run: |
+          bun run scripts/version-check.ts repositories-config.json
+          
+          # Extract summary info
+          TOTAL=$(jq -r '.totalRepositories' version-report.json)
+          UP_TO_DATE=$(jq -r '.upToDate' version-report.json)
+          OUTDATED=$(jq -r '.outdated' version-report.json)
+          MISSING=$(jq -r '.missing' version-report.json)
+          ERRORS=$(jq -r '.errors' version-report.json)
+          CONSISTENCY=$(echo "scale=1; $UP_TO_DATE * 100 / $TOTAL" | bc)
+          
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "up_to_date=$UP_TO_DATE" >> $GITHUB_OUTPUT  
+          echo "outdated=$OUTDATED" >> $GITHUB_OUTPUT
+          echo "missing=$MISSING" >> $GITHUB_OUTPUT
+          echo "errors=$ERRORS" >> $GITHUB_OUTPUT
+          echo "consistency=$CONSISTENCY" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Report Summary
+        run: |
+          echo "## 📊 Workflow Version Monitoring Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Report Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Summary Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Repositories:** ${{ steps.version-check.outputs.total }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Up to Date:** ${{ steps.version-check.outputs.up_to_date }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Outdated:** ${{ steps.version-check.outputs.outdated }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Missing:** ${{ steps.version-check.outputs.missing }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Errors:** ${{ steps.version-check.outputs.errors }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Consistency:** ${{ steps.version-check.outputs.consistency }}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.version-check.outputs.outdated }}" -gt "0" ] || [ "${{ steps.version-check.outputs.missing }}" -gt "0" ]; then
+            echo "### ⚠️ Action Required" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            jq -r '.repositories[] | select(.status != "up-to-date") | 
+              "- **\(.owner)/\(.repo)**: \(.status) (version: \(.currentVersion // "N/A"))"' version-report.json >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ All repositories are up to date!" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./
+          name: version-report-html
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: version-report-html
+
+      - name: Create Issue for Outdated Workflows
+        if: steps.version-check.outputs.outdated > 0 || steps.version-check.outputs.missing > 0
+        run: |
+          # Check if issue already exists
+          EXISTING_ISSUE=$(gh issue list --label "workflow-version-sync" --state open --json number --jq '.[0].number // empty')
+          
+          ISSUE_TITLE="🤖 Workflow Version Sync Required"
+          ISSUE_BODY="## Workflow Version Inconsistency Detected
+          
+          The automated version monitoring has detected repositories with outdated or missing workflow configurations.
+          
+          ### Summary
+          - **Outdated repositories:** ${{ steps.version-check.outputs.outdated }}
+          - **Missing workflows:** ${{ steps.version-check.outputs.missing }}  
+          - **Error repositories:** ${{ steps.version-check.outputs.errors }}
+          - **Consistency rate:** ${{ steps.version-check.outputs.consistency }}%
+          
+          ### Affected Repositories
+          $(jq -r '.repositories[] | select(.status != "up-to-date") | 
+            "- **\(.owner)/\(.repo)**: \(.status) (current: \(.currentVersion // "N/A"), expected: v\(.centralVersion))"' version-report.json)
+          
+          ### Recommended Actions
+          1. Review the [detailed report](${{ steps.deployment.outputs.page_url }})
+          2. Run the update propagation workflow to sync all repositories
+          3. Manually address any repositories with errors
+          
+          ### Automation
+          You can trigger automated updates by:
+          - Running the \`Update Propagation\` workflow manually
+          - Creating a new release (triggers automatic propagation)
+          
+          ---
+          
+          📊 **Report Details:** [View HTML Report](${{ steps.deployment.outputs.page_url }})  
+          📅 **Last Updated:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')  
+          🤖 **Automated by:** [Workflow Automation System](https://github.com/ethereumfollowprotocol/workflow-automation)
+          
+          This issue will be automatically updated or closed when all repositories are synchronized."
+          
+          if [ -n "$EXISTING_ISSUE" ]; then
+            echo "Updating existing issue #$EXISTING_ISSUE"
+            gh issue edit "$EXISTING_ISSUE" --title "$ISSUE_TITLE" --body "$ISSUE_BODY"
+            gh issue comment "$EXISTING_ISSUE" --body "🔄 **Updated:** $(date -u '+%Y-%m-%d %H:%M:%S UTC') - Consistency: ${{ steps.version-check.outputs.consistency }}%"
+          else
+            echo "Creating new issue"
+            gh issue create \
+              --title "$ISSUE_TITLE" \
+              --body "$ISSUE_BODY" \
+              --label "workflow-version-sync,automation,needs-attention" \
+              --assignee "${{ github.actor }}"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Close Issue if All Up to Date
+        if: steps.version-check.outputs.outdated == 0 && steps.version-check.outputs.missing == 0
+        run: |
+          # Find and close any open version sync issues
+          EXISTING_ISSUE=$(gh issue list --label "workflow-version-sync" --state open --json number --jq '.[0].number // empty')
+          
+          if [ -n "$EXISTING_ISSUE" ]; then
+            gh issue comment "$EXISTING_ISSUE" --body "✅ **Resolved:** All repositories are now synchronized with the latest workflow version. Closing this issue."
+            gh issue close "$EXISTING_ISSUE" --reason "completed"
+            echo "Closed issue #$EXISTING_ISSUE - all repositories are up to date"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-reports
+          path: |
+            version-report.json
+            version-report.html
+            repositories-config.json
+          retention-days: 90
+
+  notify-slack:
+    needs: version-check
+    if: always() && (needs.version-check.outputs.outdated > 0 || needs.version-check.outputs.missing > 0) && !github.event.inputs.dry_run
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Notify Slack Channel
+        if: env.SLACK_WEBHOOK_URL
+        run: |
+          CONSISTENCY="${{ needs.version-check.outputs.consistency }}"
+          COLOR="warning"
+          if (( $(echo "$CONSISTENCY < 80" | bc -l) )); then
+            COLOR="danger"  
+          fi
+          
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"Workflow Version Sync Required\",
+                \"text\": \"Some repositories have outdated workflow configurations\",
+                \"fields\": [
+                  {\"title\": \"Consistency Rate\", \"value\": \"$CONSISTENCY%\", \"short\": true},
+                  {\"title\": \"Outdated\", \"value\": \"${{ needs.version-check.outputs.outdated }}\", \"short\": true},
+                  {\"title\": \"Missing\", \"value\": \"${{ needs.version-check.outputs.missing }}\", \"short\": true},
+                  {\"title\": \"Report\", \"value\": \"<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>\", \"short\": true}
+                ]
+              }]
+            }" \
+            ${{ env.SLACK_WEBHOOK_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

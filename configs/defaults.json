@@ -1,0 +1,56 @@
+{
+  "model": "claude-3-5-sonnet-20241022",
+  "review_rules": {
+    "check_tests": true,
+    "check_documentation": true,
+    "check_security": true,
+    "check_performance": true,
+    "min_test_coverage": 80,
+    "max_complexity": 10,
+    "max_function_length": 50
+  },
+  "security_rules": {
+    "check_sql_injection": true,
+    "check_xss": true,
+    "check_auth": true,
+    "check_input_validation": true,
+    "check_secrets": true,
+    "check_crypto": true
+  },
+  "documentation_rules": {
+    "require_function_docs": true,
+    "require_class_docs": true,
+    "require_readme_update": false,
+    "check_code_comments": true
+  },
+  "response_settings": {
+    "max_response_length": 2000,
+    "include_code_examples": true,
+    "include_line_numbers": true,
+    "tone": "professional"
+  },
+  "notification_settings": {
+    "notify_on_failure": true,
+    "notify_on_critical": true
+  },
+  "exclusions": {
+    "file_patterns": [
+      "node_modules/**",
+      "*.min.js",
+      "*.min.css",
+      "dist/**",
+      "build/**",
+      "coverage/**",
+      "*.lock",
+      "*.log"
+    ],
+    "directory_patterns": [
+      "vendor/",
+      ".git/",
+      "coverage/",
+      ".next/",
+      ".cache/",
+      "tmp/"
+    ]
+  }
+}

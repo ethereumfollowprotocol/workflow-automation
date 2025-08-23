@@ -1,0 +1,314 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Workflow Automation Configuration Schema",
+  "description": "Schema for workflow automation configuration files",
+  "type": "object",
+  "properties": {
+    "model": {
+      "type": "string",
+      "enum": ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307", "claude-3-opus-20240229"],
+      "default": "claude-3-5-sonnet-20241022",
+      "description": "Anthropic model to use for AI operations"
+    },
+    "review_rules": {
+      "type": "object",
+      "properties": {
+        "check_tests": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to check for test coverage and quality"
+        },
+        "check_documentation": {
+          "type": "boolean", 
+          "default": true,
+          "description": "Whether to check documentation completeness"
+        },
+        "check_security": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to perform security analysis"
+        },
+        "check_performance": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to analyze performance implications"
+        },
+        "min_test_coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 80,
+          "description": "Minimum required test coverage percentage"
+        },
+        "max_complexity": {
+          "type": "number",
+          "minimum": 1,
+          "default": 10,
+          "description": "Maximum allowed cyclomatic complexity"
+        },
+        "max_function_length": {
+          "type": "number",
+          "minimum": 1,
+          "default": 50,
+          "description": "Maximum allowed function length in lines"
+        }
+      },
+      "additionalProperties": false
+    },
+    "security_rules": {
+      "type": "object",
+      "properties": {
+        "check_sql_injection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check for SQL injection vulnerabilities"
+        },
+        "check_xss": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check for XSS vulnerabilities"
+        },
+        "check_auth": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check authentication and authorization"
+        },
+        "check_input_validation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check input validation practices"
+        },
+        "check_secrets": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check for exposed secrets or credentials"
+        },
+        "check_crypto": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check cryptographic implementations"
+        }
+      },
+      "additionalProperties": false
+    },
+    "documentation_rules": {
+      "type": "object",
+      "properties": {
+        "require_function_docs": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require documentation for functions"
+        },
+        "require_class_docs": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require documentation for classes"
+        },
+        "require_readme_update": {
+          "type": "boolean",
+          "default": false,
+          "description": "Require README updates for significant changes"
+        },
+        "check_code_comments": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check quality of inline code comments"
+        }
+      },
+      "additionalProperties": false
+    },
+    "response_settings": {
+      "type": "object",
+      "properties": {
+        "max_response_length": {
+          "type": "number",
+          "minimum": 100,
+          "maximum": 10000,
+          "default": 2000,
+          "description": "Maximum response length in characters"
+        },
+        "include_code_examples": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include code examples in responses"
+        },
+        "include_line_numbers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include line numbers in code references"
+        },
+        "tone": {
+          "type": "string",
+          "enum": ["professional", "friendly", "technical", "casual"],
+          "default": "professional",
+          "description": "Tone for AI responses"
+        }
+      },
+      "additionalProperties": false
+    },
+    "language_specific": {
+      "type": "object",
+      "properties": {
+        "typescript": {
+          "type": "object",
+          "properties": {
+            "strict_mode": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enforce TypeScript strict mode practices"
+            },
+            "check_types": {
+              "type": "boolean", 
+              "default": true,
+              "description": "Check type definitions and usage"
+            }
+          },
+          "additionalProperties": false
+        },
+        "javascript": {
+          "type": "object",
+          "properties": {
+            "es_version": {
+              "type": "string",
+              "enum": ["es5", "es6", "es2017", "es2018", "es2019", "es2020", "es2021", "es2022"],
+              "default": "es2022",
+              "description": "ECMAScript version to target"
+            },
+            "use_strict": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enforce strict mode"
+            }
+          },
+          "additionalProperties": false
+        },
+        "python": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string",
+              "enum": ["3.8", "3.9", "3.10", "3.11", "3.12"],
+              "default": "3.11",
+              "description": "Python version to target"
+            },
+            "check_pep8": {
+              "type": "boolean",
+              "default": true,
+              "description": "Check PEP 8 compliance"
+            },
+            "check_type_hints": {
+              "type": "boolean",
+              "default": true,
+              "description": "Check for type hints"
+            }
+          },
+          "additionalProperties": false
+        },
+        "go": {
+          "type": "object", 
+          "properties": {
+            "check_gofmt": {
+              "type": "boolean",
+              "default": true,
+              "description": "Check gofmt formatting"
+            },
+            "check_golint": {
+              "type": "boolean",
+              "default": true,
+              "description": "Check golint compliance"
+            }
+          },
+          "additionalProperties": false
+        },
+        "rust": {
+          "type": "object",
+          "properties": {
+            "check_clippy": {
+              "type": "boolean",
+              "default": true,
+              "description": "Check clippy lints"
+            },
+            "check_rustfmt": {
+              "type": "boolean",
+              "default": true,
+              "description": "Check rustfmt formatting"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "notification_settings": {
+      "type": "object",
+      "properties": {
+        "slack_webhook": {
+          "type": "string",
+          "format": "uri",
+          "description": "Slack webhook URL for notifications"
+        },
+        "discord_webhook": {
+          "type": "string", 
+          "format": "uri",
+          "description": "Discord webhook URL for notifications"
+        },
+        "notify_on_failure": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send notifications on workflow failures"
+        },
+        "notify_on_critical": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send notifications for critical issues"
+        }
+      },
+      "additionalProperties": false
+    },
+    "custom_prompts": {
+      "type": "object",
+      "properties": {
+        "security_prompt_override": {
+          "type": "string",
+          "description": "Custom security review prompt"
+        },
+        "quality_prompt_override": {
+          "type": "string",
+          "description": "Custom quality review prompt"
+        },
+        "documentation_prompt_override": {
+          "type": "string",
+          "description": "Custom documentation review prompt"
+        },
+        "response_prompt_override": {
+          "type": "string",
+          "description": "Custom response prompt"
+        }
+      },
+      "additionalProperties": false
+    },
+    "exclusions": {
+      "type": "object",
+      "properties": {
+        "file_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["node_modules/**", "*.min.js", "dist/**", "build/**"],
+          "description": "File patterns to exclude from review"
+        },
+        "directory_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["vendor/", ".git/", "coverage/"],
+          "description": "Directory patterns to exclude from review"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
