@@ -13,11 +13,6 @@ on:
         required: false
         type: string
         default: '.github/ai-review-config.json'
-      claude-code-action-ref:
-        description: 'Reference to claude-code-action to use'
-        required: false
-        type: string
-        default: '0xthrpw/claude-code-action@v0.0.1'
       bot-mention:
         description: 'Bot mention trigger (@bot-name)'
         required: false
@@ -273,7 +268,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
 
       - name: AI Response
-        uses: ${{ inputs.claude-code-action-ref }}
+        uses: 0xthrpw/claude-code-action@v0.0.1
         continue-on-error: true
         timeout-minutes: ${{ inputs.max-response-time }}
         with:

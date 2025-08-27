@@ -13,11 +13,6 @@ on:
         required: false
         type: string
         default: '.github/ai-review-config.json'
-      claude-code-action-ref:
-        description: 'Reference to claude-code-action to use'
-        required: false
-        type: string
-        default: '0xthrpw/claude-code-action@v0.0.1'
       enable-security-review:
         description: 'Enable security-focused review'
         required: false
@@ -192,7 +187,7 @@ jobs:
           private-key: ${{ secrets.PRIVATE_KEY }}
 
       - name: AI Security Review
-        uses: ${{ inputs.claude-code-action-ref }}
+        uses: 0xthrpw/claude-code-action@v0.0.1
         continue-on-error: true
         timeout-minutes: ${{ inputs.max-review-time }}
         with:
@@ -232,7 +227,7 @@ jobs:
           private-key: ${{ secrets.PRIVATE_KEY }}
 
       - name: AI Quality Review
-        uses: ${{ inputs.claude-code-action-ref }}
+        uses: 0xthrpw/claude-code-action@v0.0.1
         continue-on-error: true
         timeout-minutes: ${{ inputs.max-review-time }}
         with:
@@ -273,7 +268,7 @@ jobs:
           private-key: ${{ secrets.PRIVATE_KEY }}
 
       - name: AI Documentation Review
-        uses: ${{ inputs.claude-code-action-ref }}
+        uses: 0xthrpw/claude-code-action@v0.0.1
         continue-on-error: true
         timeout-minutes: ${{ inputs.max-review-time }}
         with:
