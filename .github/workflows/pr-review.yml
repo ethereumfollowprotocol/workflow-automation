@@ -293,6 +293,9 @@ jobs:
     permissions:
       pull-requests: write
     steps:
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+
       - name: Generate Custom App Token
         id: generate-token
         uses: actions/create-github-app-token@v1
@@ -306,7 +309,7 @@ jobs:
           QUALITY_STATUS="${{ needs.quality-review.result }}"
           DOCS_STATUS="${{ needs.documentation-review.result }}"
           
-          SUMMARY="## 🤖 AI Code Review Complete\n\n"
+          SUMMARY="## AI Code Review Complete\n\n"
           SUMMARY="${SUMMARY}**Configuration:** ${{ inputs.config-profile }} profile\n"
           SUMMARY="${SUMMARY}**Language:** ${{ needs.load-configuration.outputs.language }}\n\n"
           

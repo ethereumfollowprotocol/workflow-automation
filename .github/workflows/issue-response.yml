@@ -297,6 +297,9 @@ jobs:
     permissions:
       issues: write
     steps:
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+
       - name: Generate Custom App Token
         id: generate-token
         uses: actions/create-github-app-token@v1
@@ -346,6 +349,9 @@ jobs:
     permissions:
       issues: write
     steps:
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+
       - name: Generate Custom App Token
         id: generate-token
         uses: actions/create-github-app-token@v1
@@ -355,7 +361,7 @@ jobs:
 
       - name: Escalate Complex Issue
         run: |
-          ESCALATION_MSG="## ⚠️ AI Assistant Escalation\n\n"
+          ESCALATION_MSG="## AI Assistant Escalation\n\n"
           ESCALATION_MSG="${ESCALATION_MSG}The AI assistant was unable to fully process this request. "
           ESCALATION_MSG="${ESCALATION_MSG}This issue has been automatically flagged for human review.\n\n"
           ESCALATION_MSG="${ESCALATION_MSG}**Original Request:** ${{ needs.validate-trigger.outputs.instruction }}\n\n"
