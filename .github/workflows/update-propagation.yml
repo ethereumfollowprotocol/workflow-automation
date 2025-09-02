@@ -72,35 +72,14 @@ jobs:
             "repositories": [
               {
                 "owner": "ethereumfollowprotocol",
-                "repo": "efp-app",
+                "repo": "agents-docs",
                 "workflowPath": ".github/workflows/ai-review.yml",
                 "configProfile": "frontend",
                 "enabled": true
               },
               {
                 "owner": "ethereumfollowprotocol", 
-                "repo": "contracts",
-                "workflowPath": ".github/workflows/ai-review.yml",
-                "configProfile": "backend",
-                "enabled": true
-              },
-              {
-                "owner": "ethereumfollowprotocol",
-                "repo": "api",
-                "workflowPath": ".github/workflows/ai-review.yml", 
-                "configProfile": "backend",
-                "enabled": true
-              },
-              {
-                "owner": "ethereumfollowprotocol",
-                "repo": "indexer",
-                "workflowPath": ".github/workflows/ai-review.yml",
-                "configProfile": "backend", 
-                "enabled": true
-              },
-              {
-                "owner": "ethereumfollowprotocol",
-                "repo": "list-registry",
+                "repo": "sawmill",
                 "workflowPath": ".github/workflows/ai-review.yml",
                 "configProfile": "backend",
                 "enabled": true
