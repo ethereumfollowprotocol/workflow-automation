@@ -32,8 +32,14 @@ class UpdatePropagator {
   private octokit: Octokit;
   private config: UpdateConfig;
   private centralRepo: { owner: string; repo: string };
+  private appId: string;
+  private privateKey: string;
 
   constructor(appId: string, privateKey: string, configPath: string) {
+    this.appId = appId;
+    this.privateKey = privateKey;
+    
+    // Initialize with app-level authentication first
     this.octokit = new Octokit({
       authStrategy: createAppAuth,
       auth: {
@@ -41,6 +47,7 @@ class UpdatePropagator {
         privateKey: privateKey,
       },
     });
+    
     this.config = this.loadConfig(configPath);
     this.centralRepo = {
       owner: "ethereumfollowprotocol",
@@ -55,6 +62,34 @@ class UpdatePropagator {
     
     const configContent = readFileSync(configPath, 'utf-8');
     return JSON.parse(configContent);
+  }
+
+  /**
+   * Get installation-specific Octokit instance for a repository
+   */
+  private async getInstallationOctokit(owner: string, repo: string): Promise<Octokit> {
+    try {
+      // Get the installation ID for this repository
+      const { data: installation } = await this.octokit.apps.getRepoInstallation({
+        owner: owner,
+        repo: repo,
+      });
+
+      // Create installation-specific Octokit instance
+      return new Octokit({
+        authStrategy: createAppAuth,
+        auth: {
+          appId: this.appId,
+          privateKey: this.privateKey,
+          installationId: installation.id,
+        },
+      });
+    } catch (error: any) {
+      if (error.status === 404) {
+        throw new Error(`GitHub App not installed on ${owner}/${repo}`);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -124,7 +159,9 @@ jobs:
    */
   private async needsUpdate(repo: RepositoryConfig): Promise<boolean> {
     try {
-      const { data: currentFile } = await this.octokit.repos.getContent({
+      const installationOctokit = await this.getInstallationOctokit(repo.owner, repo.repo);
+      
+      const { data: currentFile } = await installationOctokit.repos.getContent({
         owner: repo.owner,
         repo: repo.repo,
         path: repo.workflowPath,
@@ -169,11 +206,14 @@ jobs:
     }
 
     try {
+      // Get installation-specific Octokit instance
+      const installationOctokit = await this.getInstallationOctokit(repo.owner, repo.repo);
+      
       // Create a new branch for the update
       const branchName = `workflow-automation/update-v${this.config.workflowVersion}`;
       
       // Get the default branch
-      const { data: repoData } = await this.octokit.repos.get({
+      const { data: repoData } = await installationOctokit.repos.get({
         owner: repo.owner,
         repo: repo.repo,
       });
@@ -181,7 +221,7 @@ jobs:
       const defaultBranch = repoData.default_branch;
       
       // Get the latest commit SHA from default branch
-      const { data: defaultBranchData } = await this.octokit.repos.getBranch({
+      const { data: defaultBranchData } = await installationOctokit.repos.getBranch({
         owner: repo.owner,
         repo: repo.repo,
         branch: defaultBranch,
@@ -189,7 +229,7 @@ jobs:
 
       // Try to create the branch (if it doesn't exist)
       try {
-        await this.octokit.git.createRef({
+        await installationOctokit.git.createRef({
           owner: repo.owner,
           repo: repo.repo,
           ref: `refs/heads/${branchName}`,
@@ -199,7 +239,7 @@ jobs:
       } catch (error: any) {
         if (error.status === 422) {
           // Branch already exists, update it
-          await this.octokit.git.updateRef({
+          await installationOctokit.git.updateRef({
             owner: repo.owner,
             repo: repo.repo,
             ref: `heads/${branchName}`,
@@ -217,6 +257,7 @@ jobs:
 
       // Update the main workflow file
       await this.updateFile(
+        installationOctokit,
         repo,
         branchName,
         repo.workflowPath,
@@ -227,6 +268,7 @@ jobs:
       // Update the on-demand workflow file
       const onDemandPath = repo.workflowPath.replace('ai-review.yml', 'ai-on-demand.yml');
       await this.updateFile(
+        installationOctokit,
         repo,
         branchName,
         onDemandPath,
@@ -235,7 +277,7 @@ jobs:
       );
 
       // Create pull request
-      await this.createPullRequest(repo, branchName, defaultBranch);
+      await this.createPullRequest(installationOctokit, repo, branchName, defaultBranch);
       
       console.log(`✅ Successfully updated ${repo.owner}/${repo.repo}`);
       
@@ -249,6 +291,7 @@ jobs:
    * Update a file in the repository
    */
   private async updateFile(
+    octokit: Octokit,
     repo: RepositoryConfig,
     branch: string,
     filePath: string,
@@ -259,7 +302,7 @@ jobs:
 
     try {
       // Check if file exists
-      const { data: existingFile } = await this.octokit.repos.getContent({
+      const { data: existingFile } = await octokit.repos.getContent({
         owner: repo.owner,
         repo: repo.repo,
         path: filePath,
@@ -276,7 +319,7 @@ jobs:
       // File doesn't exist, will create new
     }
 
-    await this.octokit.repos.createOrUpdateFileContents({
+    await octokit.repos.createOrUpdateFileContents({
       owner: repo.owner,
       repo: repo.repo,
       path: filePath,
@@ -291,6 +334,7 @@ jobs:
    * Create a pull request for the workflow update
    */
   private async createPullRequest(
+    octokit: Octokit,
     repo: RepositoryConfig,
     branchName: string,
     baseBranch: string
@@ -322,7 +366,7 @@ ${this.config.updateMessage}
 🤖 This PR was automatically created by the [EthereumFollowProtocol Workflow Automation System](https://github.com/ethereumfollowprotocol/workflow-automation)`;
 
     try {
-      const { data: pr } = await this.octokit.pulls.create({
+      const { data: pr } = await octokit.pulls.create({
         owner: repo.owner,
         repo: repo.repo,
         title: title,
@@ -335,7 +379,7 @@ ${this.config.updateMessage}
       
       // Add labels if possible
       try {
-        await this.octokit.issues.addLabels({
+        await octokit.issues.addLabels({
           owner: repo.owner,
           repo: repo.repo,
           issue_number: pr.number,
