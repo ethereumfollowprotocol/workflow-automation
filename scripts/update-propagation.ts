@@ -103,13 +103,17 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: read    
+
 jobs:
   ai-review:
     uses: ethereumfollowprotocol/workflow-automation/.github/workflows/pr-review.yml@v${this.config.workflowVersion}
     with:
       config-profile: "${profile}"
-      repository-config: ".github/ai-review-config.json"
-      claude-code-action-ref: "0xthrpw/claude-code-action@v0.0.1"
       enable-security-review: true
       enable-quality-review: true
       enable-documentation-review: true
@@ -117,8 +121,7 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       APP_ID: \${{ secrets.APP_ID }}
       PRIVATE_KEY: \${{ secrets.PRIVATE_KEY }}
-      ALLOWED_USER_LIST: \${{ secrets.ALLOWED_USER_LIST }}
-`;
+      ALLOWED_USER_LIST: \${{ secrets.ALLOWED_USER_LIST }}`;
   }
 
   /**
@@ -136,13 +139,17 @@ on:
   issues:
     types: [opened]
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  actions: read
+
 jobs:
   ai-response:
     uses: ethereumfollowprotocol/workflow-automation/.github/workflows/issue-response.yml@v${this.config.workflowVersion}
     with:
       config-profile: "${repo.configProfile || 'default'}"
-      repository-config: ".github/ai-review-config.json"
-      claude-code-action-ref: "0xthrpw/claude-code-action@v0.0.1"
       bot-mention: "@efp-dev-ops"
       enable-auto-labeling: true
       enable-escalation: true
@@ -150,8 +157,7 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       APP_ID: \${{ secrets.APP_ID }}
       PRIVATE_KEY: \${{ secrets.PRIVATE_KEY }}
-      ALLOWED_USER_LIST: \${{ secrets.ALLOWED_USER_LIST }}
-`;
+      ALLOWED_USER_LIST: \${{ secrets.ALLOWED_USER_LIST }}`;
   }
 
   /**
