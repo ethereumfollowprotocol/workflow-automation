@@ -1,0 +1,345 @@
+name: Reusable PR Review Workflow
+
+on:
+  workflow_call:
+    inputs:
+      config-profile:
+        description: 'Configuration profile to use (default, frontend, backend, security, experimental)'
+        required: false
+        type: string
+        default: 'default'
+      repository-config:
+        description: 'Path to repository-specific configuration file'
+        required: false
+        type: string
+        default: '.github/ai-review-config.json'
+      enable-security-review:
+        description: 'Enable security-focused review'
+        required: false
+        type: boolean
+        default: true
+      enable-quality-review:
+        description: 'Enable code quality review'
+        required: false
+        type: boolean  
+        default: true
+      enable-documentation-review:
+        description: 'Enable documentation review'
+        required: false
+        type: boolean
+        default: true
+      max-review-time:
+        description: 'Maximum time for review in minutes'
+        required: false
+        type: number
+        default: 10
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: 'Claude Code OAuth token for authentication'
+        required: true
+      APP_ID:
+        description: 'GitHub App ID for token generation'
+        required: true
+      PRIVATE_KEY:
+        description: 'GitHub App private key for token generation'
+        required: true
+      ANTHROPIC_API_KEY:
+        description: 'Anthropic API key (fallback if Claude Code token fails)'
+        required: false
+      ALLOWED_USER_LIST:
+        description: 'JSON array of allowed users for triggering reviews'
+        required: false
+
+jobs:
+  load-configuration:
+    runs-on: ubuntu-latest
+    outputs:
+      config: ${{ steps.load-config.outputs.config }}
+      prompts: ${{ steps.load-prompts.outputs.prompts }}
+      language: ${{ steps.detect-language.outputs.language }}
+    steps:
+      - name: Checkout Central Workflows
+        uses: actions/checkout@v4
+        with:
+          repository: ethereumfollowprotocol/workflow-automation
+          path: central-workflows
+          ref: main
+
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+        with:
+          path: target-repo
+          fetch-depth: 0
+
+      - name: Load Configuration
+        id: load-config
+        run: |
+          CONFIG_FILE="central-workflows/configs/profiles/${{ inputs.config-profile }}.json"
+          REPO_CONFIG_FILE="target-repo/${{ inputs.repository-config }}"
+          
+          # Start with profile configuration
+          if [ -f "$CONFIG_FILE" ]; then
+            CONFIG=$(cat "$CONFIG_FILE")
+          else
+            echo "Profile ${{ inputs.config-profile }} not found, using default"
+            CONFIG=$(cat "central-workflows/configs/profiles/default.json")
+          fi
+          
+          # Override with repository-specific config if it exists
+          if [ -f "$REPO_CONFIG_FILE" ]; then
+            REPO_CONFIG=$(cat "$REPO_CONFIG_FILE")
+            # Merge configurations (repository config takes precedence)
+            CONFIG=$(echo "$CONFIG $REPO_CONFIG" | jq -s '.[0] * .[1]')
+          fi
+          
+          echo "config<<EOF" >> $GITHUB_OUTPUT
+          echo "$CONFIG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Detect Primary Language
+        id: detect-language
+        working-directory: target-repo
+        run: |
+          # Detect primary language based on file extensions in the PR
+          LANGUAGE="javascript"  # default
+          
+          if find . -name "*.ts" -o -name "*.tsx" | head -1 | grep -q .; then
+            LANGUAGE="typescript"
+          elif find . -name "*.py" | head -1 | grep -q .; then
+            LANGUAGE="python"
+          elif find . -name "*.go" | head -1 | grep -q .; then
+            LANGUAGE="go"
+          elif find . -name "*.rs" | head -1 | grep -q .; then
+            LANGUAGE="rust"
+          elif find . -name "*.java" | head -1 | grep -q .; then
+            LANGUAGE="java"
+          elif find . -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" | head -1 | grep -q .; then
+            LANGUAGE="cpp"
+          elif find . -name "*.c" | head -1 | grep -q .; then
+            LANGUAGE="c"
+          elif find . -name "*.rb" | head -1 | grep -q .; then
+            LANGUAGE="ruby"
+          elif find . -name "*.php" | head -1 | grep -q .; then
+            LANGUAGE="php"
+          fi
+          
+          echo "language=$LANGUAGE" >> $GITHUB_OUTPUT
+          echo "Detected language: $LANGUAGE"
+
+      - name: Load Prompt Templates
+        id: load-prompts
+        run: |
+          LANGUAGE="${{ steps.detect-language.outputs.language }}"
+          
+          # Load base prompts
+          SECURITY_PROMPT=""
+          QUALITY_PROMPT=""
+          DOCS_PROMPT=""
+          
+          if [ -f "central-workflows/prompts/review/security-${LANGUAGE}.md" ]; then
+            SECURITY_PROMPT=$(cat "central-workflows/prompts/review/security-${LANGUAGE}.md")
+          else
+            SECURITY_PROMPT=$(cat "central-workflows/prompts/review/security-default.md")
+          fi
+          
+          if [ -f "central-workflows/prompts/review/quality-${LANGUAGE}.md" ]; then
+            QUALITY_PROMPT=$(cat "central-workflows/prompts/review/quality-${LANGUAGE}.md")
+          else
+            QUALITY_PROMPT=$(cat "central-workflows/prompts/review/quality-default.md")
+          fi
+          
+          if [ -f "central-workflows/prompts/review/documentation-${LANGUAGE}.md" ]; then
+            DOCS_PROMPT=$(cat "central-workflows/prompts/review/documentation-${LANGUAGE}.md")
+          else
+            DOCS_PROMPT=$(cat "central-workflows/prompts/review/documentation-default.md")
+          fi
+          
+          # Create JSON object with prompts
+          PROMPTS=$(jq -n \
+            --arg security "$SECURITY_PROMPT" \
+            --arg quality "$QUALITY_PROMPT" \
+            --arg documentation "$DOCS_PROMPT" \
+            '{security: $security, quality: $quality, documentation: $documentation}')
+          
+          echo "prompts<<EOF" >> $GITHUB_OUTPUT
+          echo "$PROMPTS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  security-review:
+    if: inputs.enable-security-review
+    needs: load-configuration
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Custom App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+
+      - name: AI Security Review
+        uses: 0xthrpw/claude-code-action@v0.0.1
+        continue-on-error: true
+        timeout-minutes: ${{ inputs.max-review-time }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.generate-token.outputs.token }}
+          direct_prompt: |
+            ${{ fromJSON(needs.load-configuration.outputs.prompts).security }}
+            
+            ## Configuration
+            Language: ${{ needs.load-configuration.outputs.language }}
+            Profile: ${{ inputs.config-profile }}
+            
+            ## Additional Context
+            Repository: ${{ github.repository }}
+            PR Number: ${{ github.event.number }}
+            Author: ${{ github.event.pull_request.user.login }}
+
+  quality-review:
+    if: inputs.enable-quality-review
+    needs: load-configuration
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Custom App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+
+      - name: AI Quality Review
+        uses: 0xthrpw/claude-code-action@v0.0.1
+        continue-on-error: true
+        timeout-minutes: ${{ inputs.max-review-time }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.generate-token.outputs.token }}
+          direct_prompt: |
+            ${{ fromJSON(needs.load-configuration.outputs.prompts).quality }}
+            
+            ## Configuration
+            Language: ${{ needs.load-configuration.outputs.language }}
+            Profile: ${{ inputs.config-profile }}
+            Configuration: ${{ needs.load-configuration.outputs.config }}
+            
+            ## Additional Context
+            Repository: ${{ github.repository }}
+            PR Number: ${{ github.event.number }}
+            Author: ${{ github.event.pull_request.user.login }}
+
+  documentation-review:
+    if: inputs.enable-documentation-review
+    needs: load-configuration
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Custom App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+
+      - name: AI Documentation Review
+        uses: 0xthrpw/claude-code-action@v0.0.1
+        continue-on-error: true
+        timeout-minutes: ${{ inputs.max-review-time }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.generate-token.outputs.token }}
+          direct_prompt: |
+            ${{ fromJSON(needs.load-configuration.outputs.prompts).documentation }}
+            
+            ## Configuration
+            Language: ${{ needs.load-configuration.outputs.language }}
+            Profile: ${{ inputs.config-profile }}
+            
+            ## Additional Context
+            Repository: ${{ github.repository }}
+            PR Number: ${{ github.event.number }}
+            Author: ${{ github.event.pull_request.user.login }}
+
+  post-review-summary:
+    needs: [load-configuration, security-review, quality-review, documentation-review]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+
+      - name: Generate Custom App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+
+      - name: Post Review Summary
+        run: |
+          SECURITY_STATUS="${{ needs.security-review.result }}"
+          QUALITY_STATUS="${{ needs.quality-review.result }}"
+          DOCS_STATUS="${{ needs.documentation-review.result }}"
+          
+          SUMMARY="## AI Code Review Complete\n\n"
+          SUMMARY="${SUMMARY}**Configuration:** ${{ inputs.config-profile }} profile\n"
+          SUMMARY="${SUMMARY}**Language:** ${{ needs.load-configuration.outputs.language }}\n\n"
+          
+          if [ "${{ inputs.enable-security-review }}" = "true" ]; then
+            if [ "$SECURITY_STATUS" = "success" ]; then
+              SUMMARY="${SUMMARY}✅ Security review completed\n"
+            else
+              SUMMARY="${SUMMARY}⚠️ Security review encountered issues\n"
+            fi
+          fi
+          
+          if [ "${{ inputs.enable-quality-review }}" = "true" ]; then
+            if [ "$QUALITY_STATUS" = "success" ]; then
+              SUMMARY="${SUMMARY}✅ Code quality review completed\n"
+            else
+              SUMMARY="${SUMMARY}⚠️ Code quality review encountered issues\n"
+            fi
+          fi
+          
+          if [ "${{ inputs.enable-documentation-review }}" = "true" ]; then
+            if [ "$DOCS_STATUS" = "success" ]; then
+              SUMMARY="${SUMMARY}✅ Documentation review completed\n"
+            else
+              SUMMARY="${SUMMARY}⚠️ Documentation review encountered issues\n"
+            fi
+          fi
+          
+          SUMMARY="${SUMMARY}\nPlease review the detailed feedback above and address any high-priority items before merging.\n\n"
+          SUMMARY="${SUMMARY}---\n*This automated review was performed by the [EthereumFollowProtocol Workflow Automation System](https://github.com/ethereumfollowprotocol/workflow-automation)*"
+          
+          gh pr comment ${{ github.event.number }} --body "$SUMMARY"
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
