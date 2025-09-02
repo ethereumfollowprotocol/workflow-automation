@@ -8,6 +8,7 @@
  */
 
 import { Octokit } from "@octokit/rest";
+import { createAppAuth } from "@octokit/auth-app";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
@@ -32,8 +33,14 @@ class UpdatePropagator {
   private config: UpdateConfig;
   private centralRepo: { owner: string; repo: string };
 
-  constructor(token: string, configPath: string) {
-    this.octokit = new Octokit({ auth: token });
+  constructor(appId: string, privateKey: string, configPath: string) {
+    this.octokit = new Octokit({
+      authStrategy: createAppAuth,
+      auth: {
+        appId: appId,
+        privateKey: privateKey,
+      },
+    });
     this.config = this.loadConfig(configPath);
     this.centralRepo = {
       owner: "ethereumfollowprotocol",
@@ -392,16 +399,19 @@ ${this.config.updateMessage}
 
 // CLI usage
 async function main() {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    console.error("❌ GITHUB_TOKEN environment variable is required");
+  const appId = process.env.APP_ID;
+  const privateKey = process.env.PRIVATE_KEY;
+  
+  if (!appId || !privateKey) {
+    console.error("❌ APP_ID and PRIVATE_KEY environment variables are required");
+    console.error("ℹ️ Use GitHub App credentials instead of GITHUB_TOKEN");
     process.exit(1);
   }
 
   const configPath = process.argv[2] || './config/repositories.json';
   
   try {
-    const propagator = new UpdatePropagator(token, configPath);
+    const propagator = new UpdatePropagator(appId, privateKey, configPath);
     await propagator.run();
   } catch (error) {
     console.error("❌ Update propagation failed:", error);

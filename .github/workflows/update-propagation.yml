@@ -103,7 +103,8 @@ jobs:
           export GITHUB_TOKEN="${{ steps.generate-token.outputs.token }}"
           bun run scripts/update-propagation.ts update-config.json
         env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          APP_ID: ${{ secrets.APP_ID }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
 
       - name: Generate Report
         if: always()
