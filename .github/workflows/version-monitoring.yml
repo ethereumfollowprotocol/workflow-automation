@@ -26,6 +26,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Generate Custom App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
@@ -78,7 +85,7 @@ jobs:
           echo "errors=$ERRORS" >> $GITHUB_OUTPUT
           echo "consistency=$CONSISTENCY" >> $GITHUB_OUTPUT
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
 
       - name: Generate Report Summary
         run: |
@@ -171,7 +178,7 @@ jobs:
               --assignee "${{ github.actor }}"
           fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
 
       - name: Close Issue if All Up to Date
         if: steps.version-check.outputs.outdated == 0 && steps.version-check.outputs.missing == 0
@@ -185,7 +192,7 @@ jobs:
             echo "Closed issue #$EXISTING_ISSUE - all repositories are up to date"
           fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
 
       - name: Upload Artifacts
         if: always()
