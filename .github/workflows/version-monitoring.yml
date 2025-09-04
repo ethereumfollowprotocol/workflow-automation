@@ -85,7 +85,8 @@ jobs:
           echo "errors=$ERRORS" >> $GITHUB_OUTPUT
           echo "consistency=$CONSISTENCY" >> $GITHUB_OUTPUT
         env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          APP_ID: ${{ secrets.APP_ID }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
 
       - name: Generate Report Summary
         run: |

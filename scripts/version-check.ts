@@ -8,6 +8,7 @@
  */
 
 import { Octokit } from "@octokit/rest";
+import { createAppAuth } from "@octokit/auth-app";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 
 interface RepositoryInfo {
@@ -42,9 +43,22 @@ class VersionChecker {
   private octokit: Octokit;
   private centralRepo: { owner: string; repo: string };
   private repositories: { owner: string; repo: string; workflowPath: string; configProfile?: string }[];
+  private appId: string;
+  private privateKey: string;
 
-  constructor(token: string, repositoriesConfig: string) {
-    this.octokit = new Octokit({ auth: token });
+  constructor(appId: string, privateKey: string, repositoriesConfig: string) {
+    this.appId = appId;
+    this.privateKey = privateKey;
+    
+    // Initialize with app-level authentication first
+    this.octokit = new Octokit({
+      authStrategy: createAppAuth,
+      auth: {
+        appId: appId,
+        privateKey: privateKey,
+      },
+    });
+    
     this.centralRepo = {
       owner: "ethereumfollowprotocol",
       repo: "workflow-automation"
@@ -64,6 +78,34 @@ class VersionChecker {
       this.repositories = config.repositories.filter((repo: any) => repo.enabled !== false);
     } else {
       throw new Error("Invalid repositories configuration format");
+    }
+  }
+
+  /**
+   * Get installation-specific Octokit instance for a repository
+   */
+  private async getInstallationOctokit(owner: string, repo: string): Promise<Octokit> {
+    try {
+      // Get the installation ID for this repository
+      const { data: installation } = await this.octokit.apps.getRepoInstallation({
+        owner: owner,
+        repo: repo,
+      });
+
+      // Create installation-specific Octokit instance
+      return new Octokit({
+        authStrategy: createAppAuth,
+        auth: {
+          appId: this.appId,
+          privateKey: this.privateKey,
+          installationId: installation.id,
+        },
+      });
+    } catch (error: any) {
+      if (error.status === 404) {
+        throw new Error(`GitHub App not installed on ${owner}/${repo}`);
+      }
+      throw error;
     }
   }
 
@@ -130,8 +172,11 @@ class VersionChecker {
     try {
       console.log(`🔍 Checking ${repo.owner}/${repo.repo}...`);
 
+      // Get installation-specific Octokit instance
+      const installationOctokit = await this.getInstallationOctokit(repo.owner, repo.repo);
+
       // Try to get the workflow file
-      const { data: fileData } = await this.octokit.repos.getContent({
+      const { data: fileData } = await installationOctokit.repos.getContent({
         owner: repo.owner,
         repo: repo.repo,
         path: repo.workflowPath,
@@ -153,7 +198,7 @@ class VersionChecker {
       }
 
       // Check for existing update pull requests
-      const { data: pulls } = await this.octokit.pulls.list({
+      const { data: pulls } = await installationOctokit.pulls.list({
         owner: repo.owner,
         repo: repo.repo,
         state: 'open',
@@ -165,14 +210,19 @@ class VersionChecker {
       }
 
     } catch (error: any) {
-      if (error.status === 404) {
+      if (error.message.includes('not installed')) {
+        repoInfo.status = 'error';
+        repoInfo.errorMessage = 'GitHub App not installed on repository';
+        console.log(`⚠️ GitHub App not installed on ${repo.owner}/${repo.repo}`);
+      } else if (error.status === 404) {
         repoInfo.status = 'missing';
-        repoInfo.errorMessage = 'Workflow file not found';
+        repoInfo.errorMessage = 'Workflow file not found or repository not accessible';
+        console.log(`⚠️ Repository or workflow file not found: ${repo.owner}/${repo.repo}`);
       } else {
         repoInfo.status = 'error';
         repoInfo.errorMessage = error.message;
+        console.error(`❌ Error checking ${repo.owner}/${repo.repo}:`, error.message);
       }
-      console.error(`❌ Error checking ${repo.owner}/${repo.repo}:`, error.message);
     }
 
     return repoInfo;
@@ -404,16 +454,19 @@ class VersionChecker {
 
 // CLI usage
 async function main() {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    console.error("❌ GITHUB_TOKEN environment variable is required");
+  const appId = process.env.APP_ID;
+  const privateKey = process.env.PRIVATE_KEY;
+  
+  if (!appId || !privateKey) {
+    console.error("❌ APP_ID and PRIVATE_KEY environment variables are required");
+    console.error("ℹ️ Use GitHub App credentials instead of GITHUB_TOKEN");
     process.exit(1);
   }
 
   const configPath = process.argv[2] || './config/repositories.json';
   
   try {
-    const checker = new VersionChecker(token, configPath);
+    const checker = new VersionChecker(appId, privateKey, configPath);
     const report = await checker.run();
     
     // Exit with error code if there are issues
