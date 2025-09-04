@@ -115,17 +115,17 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./
-          name: version-report-html
+    #   - name: Upload Pages Artifact
+    #     uses: actions/upload-pages-artifact@v3
+    #     with:
+    #       path: ./
+    #       name: version-report-html
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-        with:
-          artifact_name: version-report-html
+    #   - name: Deploy to GitHub Pages
+    #     id: deployment
+    #     uses: actions/deploy-pages@v4
+    #     with:
+    #       artifact_name: version-report-html
 
       - name: Create Issue for Outdated Workflows
         if: steps.version-check.outputs.outdated > 0 || steps.version-check.outputs.missing > 0
@@ -149,7 +149,7 @@ jobs:
             "- **\(.owner)/\(.repo)**: \(.status) (current: \(.currentVersion // "N/A"), expected: v\(.centralVersion))"' version-report.json)
           
           ### Recommended Actions
-          1. Review the [detailed report](${{ steps.deployment.outputs.page_url }})
+          1. Review and identify affected repositories
           2. Run the update propagation workflow to sync all repositories
           3. Manually address any repositories with errors
           
@@ -160,7 +160,6 @@ jobs:
           
           ---
           
-          📊 **Report Details:** [View HTML Report](${{ steps.deployment.outputs.page_url }})  
           📅 **Last Updated:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')  
           🤖 **Automated by:** [Workflow Automation System](https://github.com/ethereumfollowprotocol/workflow-automation)
           
@@ -195,16 +194,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
 
-      - name: Upload Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: version-reports
-          path: |
-            version-report.json
-            version-report.html
-            repositories-config.json
-          retention-days: 90
+    #   - name: Upload Artifacts
+    #     if: always()
+    #     uses: actions/upload-artifact@v4
+    #     with:
+    #       name: version-reports
+    #       path: |
+    #         version-report.json
+    #         version-report.html
+    #         repositories-config.json
+    #       retention-days: 90
 
   notify-slack:
     needs: version-check
