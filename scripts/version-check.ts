@@ -114,8 +114,11 @@ class VersionChecker {
    */
   private async getCentralVersion(): Promise<string> {
     try {
+      // Get installation-specific Octokit instance for central repository
+      const centralOctokit = await this.getInstallationOctokit(this.centralRepo.owner, this.centralRepo.repo);
+      
       // Get latest release
-      const { data: latestRelease } = await this.octokit.repos.getLatestRelease({
+      const { data: latestRelease } = await centralOctokit.repos.getLatestRelease({
         owner: this.centralRepo.owner,
         repo: this.centralRepo.repo,
       });
@@ -123,14 +126,20 @@ class VersionChecker {
       return latestRelease.tag_name.replace(/^v/, '');
     } catch (error: any) {
       if (error.status === 404) {
-        // No releases yet, use latest commit
-        const { data: commits } = await this.octokit.repos.listCommits({
-          owner: this.centralRepo.owner,
-          repo: this.centralRepo.repo,
-          per_page: 1,
-        });
-        
-        return commits[0]?.sha.substring(0, 7) || 'unknown';
+        try {
+          // No releases yet, use latest commit
+          const centralOctokit = await this.getInstallationOctokit(this.centralRepo.owner, this.centralRepo.repo);
+          const { data: commits } = await centralOctokit.repos.listCommits({
+            owner: this.centralRepo.owner,
+            repo: this.centralRepo.repo,
+            per_page: 1,
+          });
+          
+          return commits[0]?.sha.substring(0, 7) || 'unknown';
+        } catch (commitError: any) {
+          console.error(`❌ Failed to get commits from central repository:`, commitError.message);
+          return 'unknown';
+        }
       }
       throw error;
     }
