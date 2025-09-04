@@ -112,8 +112,8 @@ jobs:
             echo "### ✅ All repositories are up to date!" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+    #   - name: Setup Pages
+    #     uses: actions/configure-pages@v4
 
     #   - name: Upload Pages Artifact
     #     uses: actions/upload-pages-artifact@v3
