@@ -133,7 +133,7 @@ jobs:
           # Check if issue already exists
           EXISTING_ISSUE=$(gh issue list --label "workflow-version-sync" --state open --json number --jq '.[0].number // empty')
           
-          ISSUE_TITLE="🤖 Workflow Version Sync Required"
+          ISSUE_TITLE="Workflow Version Sync Required"
           ISSUE_BODY="## Workflow Version Inconsistency Detected
           
           The automated version monitoring has detected repositories with outdated or missing workflow configurations.
@@ -160,8 +160,8 @@ jobs:
           
           ---
           
-          📅 **Last Updated:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')  
-          🤖 **Automated by:** [Workflow Automation System](https://github.com/ethereumfollowprotocol/workflow-automation)
+          **Last Updated:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')  
+          **Automated by:** [Workflow Automation System](https://github.com/ethereumfollowprotocol/workflow-automation)
           
           This issue will be automatically updated or closed when all repositories are synchronized."
           
