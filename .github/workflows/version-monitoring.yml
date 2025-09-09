@@ -182,13 +182,6 @@ jobs:
               },
               {
                 "owner": "ethereumfollowprotocol",
-                "repo": "sprinter",
-                "workflowPath": ".github/workflows/ai-review.yml",
-                "configProfile": "default",
-                "enabled": true
-              },
-              {
-                "owner": "ethereumfollowprotocol",
                 "repo": "cache-register",
                 "workflowPath": ".github/workflows/ai-review.yml",
                 "configProfile": "default",
