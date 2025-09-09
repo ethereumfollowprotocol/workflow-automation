@@ -41,8 +41,8 @@ jobs:
         id: generate-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.PRIVATE_KEY }}
+          app-id: ${{ secrets.DEV_OPS_BOT_APP_ID }}
+          private-key: ${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -90,6 +90,146 @@ jobs:
                 "workflowPath": ".github/workflows/ai-review.yml",
                 "configProfile": "backend",
                 "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "docs",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "frontend",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "google-services-mcp",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "backend",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "team-mcp",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "backend",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "ListRecordsV2",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "security",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "RTPs",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "security",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "services",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "telegram-llm",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "sub-agents",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "ethid-mcp",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "indexer",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "feed",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "sprinter",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "api",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "txp",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "mcp",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "recommended-list",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "sprinter",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "cache-register",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "follow-bot",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
+              },
+              {
+                "owner": "ethereumfollowprotocol",
+                "repo": "onchain",
+                "workflowPath": ".github/workflows/ai-review.yml",
+                "configProfile": "default",
+                "enabled": true
               }
             ],
             "workflowVersion": "${{ steps.version.outputs.version }}",
@@ -103,8 +243,8 @@ jobs:
           export GITHUB_TOKEN="${{ steps.generate-token.outputs.token }}"
           bun run scripts/update-propagation.ts update-config.json
         env:
-          APP_ID: ${{ secrets.APP_ID }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          APP_ID: ${{ secrets.DEV_OPS_BOT_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
 
       - name: Generate Report
         if: always()

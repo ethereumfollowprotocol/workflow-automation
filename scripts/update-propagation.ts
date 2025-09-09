@@ -118,10 +118,10 @@ jobs:
       enable-quality-review: true
       enable-documentation-review: true
     secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-      APP_ID: \${{ secrets.APP_ID }}
-      PRIVATE_KEY: \${{ secrets.PRIVATE_KEY }}
-      ALLOWED_USER_LIST: \${{ secrets.ALLOWED_USER_LIST }}`;
+      CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.DEV_OPS_BOT_CLAUDE_CODE_OAUTH_TOKEN }}
+      APP_ID: \${{ secrets.DEV_OPS_BOT_APP_ID }}
+      PRIVATE_KEY: \${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
+      ALLOWED_USER_LIST: \${{ secrets.DEV_OPS_BOT_ALLOWED_USER_LIST }}`;
   }
 
   /**
@@ -154,10 +154,10 @@ jobs:
       enable-auto-labeling: true
       enable-escalation: true
     secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-      APP_ID: \${{ secrets.APP_ID }}
-      PRIVATE_KEY: \${{ secrets.PRIVATE_KEY }}
-      ALLOWED_USER_LIST: \${{ secrets.ALLOWED_USER_LIST }}`;
+      CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.DEV_OPS_BOT_CLAUDE_CODE_OAUTH_TOKEN }}
+      APP_ID: \${{ secrets.DEV_OPS_BOT_APP_ID }}
+      PRIVATE_KEY: \${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
+      ALLOWED_USER_LIST: \${{ secrets.DEV_OPS_BOT_ALLOWED_USER_LIST }}`;
   }
 
   /**
@@ -345,8 +345,8 @@ jobs:
     branchName: string,
     baseBranch: string
   ): Promise<void> {
-    const title = `🤖 Update AI Workflow Automation to v${this.config.workflowVersion}`;
-    const body = `## 🚀 Workflow Automation Update
+    const title = `Update AI Workflow Automation to v${this.config.workflowVersion}`;
+    const body = `## Workflow Automation Update
 
 This PR updates the AI workflow automation to version **v${this.config.workflowVersion}**.
 
@@ -369,7 +369,7 @@ This PR updates the AI workflow automation to version **v${this.config.workflowV
 ${this.config.updateMessage}
 
 ---
-🤖 This PR was automatically created by the [EthereumFollowProtocol Workflow Automation System](https://github.com/ethereumfollowprotocol/workflow-automation)`;
+This PR was automatically created by the [EthereumFollowProtocol Workflow Automation System](https://github.com/ethereumfollowprotocol/workflow-automation)`;
 
     try {
       const { data: pr } = await octokit.pulls.create({
