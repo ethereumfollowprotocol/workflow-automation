@@ -242,8 +242,8 @@ jobs:
         id: generate-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.PRIVATE_KEY }}
+          app-id: ${{ secrets.DEV_OPS_BOT_APP_ID }}
+          private-key: ${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
 
       - name: React to Mention
         run: |
@@ -272,7 +272,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: ${{ inputs.max-response-time }}
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.DEV_OPS_BOT_CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.generate-token.outputs.token }}
           direct_prompt: |
             ${{ needs.load-configuration.outputs.response-prompt }}
@@ -304,8 +304,8 @@ jobs:
         id: generate-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.PRIVATE_KEY }}
+          app-id: ${{ secrets.DEV_OPS_BOT_APP_ID }}
+          private-key: ${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
 
       - name: Auto-label Issue
         run: |
