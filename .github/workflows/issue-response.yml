@@ -356,8 +356,8 @@ jobs:
         id: generate-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.PRIVATE_KEY }}
+          app-id: ${{ secrets.DEV_OPS_BOT_APP_ID }}
+          private-key: ${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
 
       - name: Escalate Complex Issue
         run: |
