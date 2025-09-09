@@ -78,7 +78,7 @@ jobs:
           
           # Check if user is in allowed list
           if [ "$SHOULD_RESPOND" = "true" ]; then
-            ALLOWED_USERS="${{ secrets.ALLOWED_USER_LIST }}"
+            ALLOWED_USERS="${{ secrets.DEV_OPS_BOT_ALLOWED_USER_LIST }}"
             if [ -n "$ALLOWED_USERS" ]; then
               if ! echo "$ALLOWED_USERS" | jq -r '.[]' | grep -q "^${{ github.actor }}$"; then
                 echo "User ${{ github.actor }} not in allowed list"
