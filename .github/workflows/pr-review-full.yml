@@ -34,19 +34,19 @@ on:
         type: number
         default: 10
     secrets:
-      CLAUDE_CODE_OAUTH_TOKEN:
+      DEV_OPS_BOT_CLAUDE_CODE_OAUTH_TOKEN:
         description: 'Claude Code OAuth token for authentication'
         required: true
-      APP_ID:
+      DEV_OPS_BOT_APP_ID:
         description: 'GitHub App ID for token generation'
         required: true
-      PRIVATE_KEY:
+      DEV_OPS_BOT_PRIVATE_KEY:
         description: 'GitHub App private key for token generation'
         required: true
       ANTHROPIC_API_KEY:
         description: 'Anthropic API key (fallback if Claude Code token fails)'
         required: false
-      ALLOWED_USER_LIST:
+      DEV_OPS_BOT_ALLOWED_USER_LIST:
         description: 'JSON array of allowed users for triggering reviews'
         required: false
 
