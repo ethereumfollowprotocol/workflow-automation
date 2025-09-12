@@ -114,14 +114,11 @@ jobs:
     uses: ethereumfollowprotocol/workflow-automation/.github/workflows/pr-review.yml@v${this.config.workflowVersion}
     with:
       config-profile: "${profile}"
-      enable-security-review: true
-      enable-quality-review: true
-      enable-documentation-review: true
     secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.DEV_OPS_BOT_CLAUDE_CODE_OAUTH_TOKEN }}
-      APP_ID: \${{ secrets.DEV_OPS_BOT_APP_ID }}
-      PRIVATE_KEY: \${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
-      ALLOWED_USER_LIST: \${{ secrets.DEV_OPS_BOT_ALLOWED_USER_LIST }}`;
+      DEV_OPS_BOT_CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.DEV_OPS_BOT_CLAUDE_CODE_OAUTH_TOKEN }}
+      DEV_OPS_BOT_APP_ID: \${{ secrets.DEV_OPS_BOT_APP_ID }}
+      DEV_OPS_BOT_PRIVATE_KEY: \${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
+      DEV_OPS_BOT_ALLOWED_USER_LIST: \${{ secrets.DEV_OPS_BOT_ALLOWED_USER_LIST }}`;
   }
 
   /**
@@ -154,10 +151,10 @@ jobs:
       enable-auto-labeling: true
       enable-escalation: true
     secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.DEV_OPS_BOT_CLAUDE_CODE_OAUTH_TOKEN }}
-      APP_ID: \${{ secrets.DEV_OPS_BOT_APP_ID }}
-      PRIVATE_KEY: \${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
-      ALLOWED_USER_LIST: \${{ secrets.DEV_OPS_BOT_ALLOWED_USER_LIST }}`;
+      DEV_OPS_BOT_CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.DEV_OPS_BOT_CLAUDE_CODE_OAUTH_TOKEN }}
+      DEV_OPS_BOT_APP_ID: \${{ secrets.DEV_OPS_BOT_APP_ID }}
+      DEV_OPS_BOT_PRIVATE_KEY: \${{ secrets.DEV_OPS_BOT_PRIVATE_KEY }}
+      DEV_OPS_BOT_ALLOWED_USER_LIST: \${{ secrets.DEV_OPS_BOT_ALLOWED_USER_LIST }}`;
   }
 
   /**

@@ -13,6 +13,21 @@ on:
         required: false
         type: string
         default: '.github/ai-review-config.json'
+      enable-security-review:
+        description: 'Enable security-focused review'
+        required: false
+        type: boolean
+        default: false
+      enable-quality-review:
+        description: 'Enable code quality review'
+        required: false
+        type: boolean  
+        default: true
+      enable-documentation-review:
+        description: 'Enable documentation review'
+        required: false
+        type: boolean
+        default: false
       max-review-time:
         description: 'Maximum time for review in minutes'
         required: false
